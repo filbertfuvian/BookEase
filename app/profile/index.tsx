@@ -6,6 +6,8 @@ import { getUser, addUser } from '@/hooks/useUser';
 import UpdateModal from '@/components/UpdateModal';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -70,19 +72,46 @@ export default function ProfileScreen() {
     return `${maskedDigits}${lastFourDigits}`;
   };
 
-  const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      handleUpdateProfile('profilePicture', result.assets[0].uri);
+  const handleProfilePictureChange = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Sorry, we need camera roll permissions to change profile picture.');
+        return;
+      }
+  
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
+  
+      if (!result.canceled) {
+        const user = auth.currentUser;
+        if (!user) return;
+  
+        // Get base64 string directly from ImagePicker
+        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+  
+        // Update user document with base64 string
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          profilePicture: base64Image
+        });
+  
+        // Update local state
+        setUserData(prev => prev ? ({
+          ...prev,
+          profilePicture: base64Image
+        }) : null);
+      }
+    } catch (error) {
+      console.error('Error updating profile picture:', error);
+      alert('Failed to update profile picture');
     }
   };
-
   if (!userData) {
     return <Text>Loading...</Text>;
   }
@@ -99,10 +128,12 @@ export default function ProfileScreen() {
 
       {/* Profile Info */}
       <View style={styles.profileInfo}>
-        <Image 
-          source={{ uri: userData.profilePicture }} 
-          style={styles.profilePicture}
-        />
+        <TouchableOpacity onPress={handleProfilePictureChange}>
+          <Image 
+            source={userData.profilePicture ? { uri: userData.profilePicture } : require('@/assets/images/default-avatar.png')}
+            style={styles.profilePicture} 
+          />
+        </TouchableOpacity>
         <Text style={styles.name}>{userData.name}</Text>
         <Text style={styles.email}>{auth.currentUser?.email}</Text>
       </View>
@@ -127,7 +158,7 @@ export default function ProfileScreen() {
         <Text style={styles.sectionTitle}>Edit Profile</Text>
         <TouchableOpacity
           style={styles.sectionButton}
-          onPress={pickImage}
+          onPress={handleProfilePictureChange}
         >
           <IconSymbol name="pencil" size={24} color="#000" style={styles.icon} />
           <Text style={styles.sectionButtonText}>Customize Profile Picture</Text>
@@ -160,12 +191,24 @@ export default function ProfileScreen() {
           <Text style={styles.sectionButtonText}>Change Address</Text>
           <Text style={styles.previewText}>{userData.address}</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Others Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Others</Text>
         <TouchableOpacity
           style={styles.sectionButton}
-          onPress={() => router.push('/admin')}
+          onPress={() => router.push('/profile/admin')}
         >
           <IconSymbol name="person.fill" size={24} color="#000" style={styles.icon} />
           <Text style={styles.sectionButtonText}>Admin Dashboard</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.sectionButton}
+          onPress={() => auth.signOut()}
+        >
+          <IconSymbol name="rectangle.portrait.and.arrow.right" size={24} color="#000" style={styles.icon} />
+          <Text style={styles.sectionButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>
 
@@ -220,7 +263,7 @@ const styles = StyleSheet.create({
     marginTop: 5
   },
   section: {
-    marginBottom: 20
+    marginBottom: 16
   },
   sectionTitle: {
     fontSize: 18,

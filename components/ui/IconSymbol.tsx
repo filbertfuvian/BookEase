@@ -21,6 +21,8 @@ const MAPPING = {
   'envelope.fill': 'email',
   'phone.fill': 'phone',
   'bell.fill': 'notifications',
+  'person.fill': 'person',
+  'rectangle.portrait.and.arrow.right': 'logout',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],
