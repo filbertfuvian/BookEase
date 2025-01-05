@@ -4,6 +4,7 @@ import { auth, db } from '../../firebaseConfig';
 import { getUser } from '@/hooks/useUser';
 import { getBooks } from '@/hooks/useBook';
 import { getLibraries } from '../../services/api';
+import { Timestamp } from 'firebase/firestore';
 
 export default function HistoryScreen() {
   const [activeTab, setActiveTab] = useState<'waiting' | 'borrowing' | 'completed'>('waiting');
@@ -11,7 +12,7 @@ export default function HistoryScreen() {
   const [borrowingBooks, setBorrowingBooks] = useState([]);
   const [completedBooks, setCompletedBooks] = useState([]);
   const [books, setBooks] = useState([]);
-  const [libraries, setLibraries] = useState([]);
+  const [libraries, setLibraries] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchData() {
@@ -31,53 +32,36 @@ export default function HistoryScreen() {
         
         const librariesData = await getLibraries(libraryIDs);
         if (!librariesData || librariesData.length === 0) {
-          console.error("Tidak ada data perpustakaan yang ditemukan.");
-          return;
+          setLibraries([]);
+        } else {
+          setLibraries(librariesData);
         }
 
-        const formatBookData = (bookArray) => {
-          return bookArray.map(book => {
-            const bookInfo = booksData.find(b => b.id === book.bookID);
-            const libraryInfo = librariesData.find(l => l.perpusID === book.perpusID);
-            return {
-              ...book,
-              title: bookInfo?.title || 'Unknown Title',
-              libraryName: libraryInfo?.name || 'Unknown Library'
-            };
-          });
-        };
-
-        setWaitingBooks(formatBookData(data?.booksToBePickedUp || []));
-        setBorrowingBooks(formatBookData(data?.currentlyBorrowing || []));
-        setCompletedBooks(formatBookData(data?.completed || []));
+        setWaitingBooks(data?.booksToBePickedUp || []);
+        setBorrowingBooks(data?.currentlyBorrowing || []);
+        setCompletedBooks(data?.completed || []);
       }
     }
     fetchData();
-  }, [libraries]);
+  }, []);
 
-  const calculateTimeLeft = (pickupDate) => {
+  const calculateTimeLeft = (dueDate) => {
     const now = new Date();
-    const diff = new Date(pickupDate) - now;
+    const due = dueDate instanceof Timestamp ? dueDate.toDate() : new Date(dueDate);
 
-    if (diff <= 0) {
-      return {
-        expired: true,
-        timeLeft: 'Expired'
-      };
-    }
+    const diffInMs = due.getTime() - now.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
 
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (days > 1) {
-      return { expired: false, timeLeft: `${days} days left` };
-    } else if (hours > 1) {
-      return { expired: false, timeLeft: `${hours} hours left` };
-    } else if (minutes >= 1) {
-      return { expired: false, timeLeft: `${minutes} minutes left` };
+    if (diffInDays > 0) {
+      return { expired: false, timeLeft: `${diffInDays} days left` };
+    } else if (diffInHours > 0) {
+      return { expired: false, timeLeft: `${diffInHours} hours left` };
+    } else if (diffInMinutes > 0) {
+      return { expired: false, timeLeft: `${diffInMinutes} minutes left` };
     } else {
-      return { expired: false, timeLeft: 'Less than 1 minute left' };
+      return { expired: true, timeLeft: 'Less than 1 minute left' };
     }
   };
 
@@ -89,11 +73,13 @@ export default function HistoryScreen() {
         renderItem={({ item }) => {
           const { expired, timeLeft } = calculateTimeLeft(item.pickupDate);
           const timeLeftStyle = expired ? styles.expired : styles.timeLeft;
+          const book = books.find(b => b.id === item.bookID);
+          const library = libraries.find(l => l.perpusID === item.perpusID);
           return (
             <View style={styles.item}>
               <View>
-                <Text style={styles.bold}>{item.title}</Text>
-                <Text>{item.libraryName}</Text>
+                <Text style={styles.bold}>{book?.title || 'Unknown Title'}</Text>
+                <Text>{library?.name || 'Unknown Library'}</Text>
               </View>
               {expired ? (
                 <Text style={styles.expired}>Reservation Expired</Text>
@@ -113,16 +99,18 @@ export default function HistoryScreen() {
         data={borrowingBooks}
         keyExtractor={(item) => item.bookID.toString()}
         renderItem={({ item }) => {
-          const { expired, timeLeft } = calculateTimeLeft(item.pickupDate);
-          const timeLeftStyle = expired ? styles.warning : styles.timeLeft;
+          const { expired, timeLeft } = calculateTimeLeft(item.dueDate);
+          const timeLeftStyle = expired ? styles.expired : styles.timeLeft;
+          const book = books.find(b => b.id === item.bookID);
+          const library = libraries.find(l => l.perpusID === item.perpusID);
           return (
             <View style={styles.item}>
               <View>
-                <Text style={styles.bold}>{item.title}</Text>
-                <Text>{item.libraryName}</Text>
+                <Text style={styles.bold}>{book?.title || 'Unknown Title'}</Text>
+                <Text>{library?.name || 'Unknown Library'}</Text>
               </View>
               {expired ? (
-                <Text style={styles.warning}>Warning</Text>
+                <Text style={styles.expired}>Due Date Passed</Text>
               ) : (
                 <Text style={timeLeftStyle}>{timeLeft}</Text>
               )}
@@ -133,32 +121,37 @@ export default function HistoryScreen() {
     );
   };
 
-  const renderCompleted = () => (
-    <FlatList
-      data={completedBooks}
-      keyExtractor={(item) => item.bookID.toString()}
-      renderItem={({ item }) => (
-        <View style={styles.item}>
-          <View>
-            <Text style={styles.bold}>{item.title}</Text>
-            <Text>{item.libraryName}</Text>
-          </View>
-          <Text>{item.bookPoint} points</Text>
-        </View>
-      )}
-    />
-  );
+  const renderCompleted = () => {
+    return (
+      <FlatList
+        data={completedBooks}
+        keyExtractor={(item) => item.bookID.toString()}
+        renderItem={({ item }) => {
+          const book = books.find(b => b.id === item.bookID);
+          const library = libraries.find(l => l.perpusID === item.perpusID);
+          return (
+            <View style={styles.item}>
+              <View>
+                <Text style={styles.bold}>{book?.title || 'Unknown Title'}</Text>
+                <Text>{library?.name || 'Unknown Library'}</Text>
+              </View>
+              <Text style={styles.completed}>Completed</Text>
+            </View>
+          );
+        }}
+      />
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>History</Text>
       <View style={styles.tabContainer}>
         <TouchableOpacity 
           onPress={() => setActiveTab('waiting')} 
           style={[styles.tabButton, activeTab === 'waiting' && styles.activeTab]}
         >
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.tabText}>
-            Waiting to be Picked Up
+            Waiting
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
@@ -166,7 +159,7 @@ export default function HistoryScreen() {
           style={[styles.tabButton, activeTab === 'borrowing' && styles.activeTab]}
         >
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.tabText}>
-            Currently Borrowing
+            Borrowing
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
@@ -201,39 +194,45 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 20, marginBottom: 16, fontWeight: 'bold' },
   tabContainer: { 
-    flexDirection: 'row', 
-    marginBottom: 16, 
-    justifyContent: 'space-between',
-    paddingHorizontal: 4
+    flexDirection: 'row',
+    marginBottom: 16
   },
   tabButton: { 
-    width: '32%',
-    padding: 8, 
-    borderWidth: 1, 
-    borderColor: '#ccc', 
-    borderRadius: 8,
-    alignItems: 'center'
+    flex: 1, 
+    padding: 12, 
+    alignItems: 'center', 
+    borderBottomWidth: 2, 
+    borderBottomColor: 'transparent' 
   },
-  activeTab: { backgroundColor: '#ddd' },
-  item: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee'
+  activeTab: { 
+    borderBottomColor: '#000' 
   },
-  bold: { fontWeight: 'bold' },
-  timeLeft: { color: 'black' },
-  expired: { color: 'red', fontWeight: 'bold' },
-  warning: { color: 'red', fontWeight: 'bold' },
-  tabText: {
-    fontSize: 12
+  tabText: { 
+    fontSize: 16, 
+    fontWeight: 'bold' 
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    marginTop: 8,
-    paddingHorizontal: 4
+  sectionTitle: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    marginBottom: 16 
+  },
+  item: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    padding: 16, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#eee' 
+  },
+  bold: { 
+    fontWeight: 'bold' 
+  },
+  expired: { 
+    color: 'red' 
+  },
+  timeLeft: { 
+    color: 'green' 
+  },
+  completed: { 
+    color: 'blue' 
   }
 });
