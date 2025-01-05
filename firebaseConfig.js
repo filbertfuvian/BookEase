@@ -2,7 +2,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-
 const firebaseConfig = {
   apiKey: 'AIzaSyDiJDhbyiG2S4XUFKsqaMHnU5T0No8hC9M',
   authDomain: 'bookease3.firebaseapp.com',
