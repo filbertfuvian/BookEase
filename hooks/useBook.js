@@ -1,5 +1,5 @@
 import { db } from '../firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
 
 /**
  * Fetches all books from the Firestore 'books' collection.
@@ -17,3 +17,23 @@ export async function getBooks() {
     throw error;
   }
 }
+
+export const getBookById = async (bookID) => {
+  const bookRef = doc(db, 'books', bookID);
+  const bookDoc = await getDoc(bookRef);
+  if (bookDoc.exists()) {
+    return bookDoc.data();
+  }
+  return null;
+};
+
+export const getBooksByGenres = async (genres) => {
+  const booksRef = collection(db, 'books');
+  const q = query(booksRef, where('genres', 'array-contains-any', genres));
+  const querySnapshot = await getDocs(q);
+  const books = [];
+  querySnapshot.forEach((doc) => {
+    books.push({ ...doc.data(), id: doc.id });
+  });
+  return books;
+};

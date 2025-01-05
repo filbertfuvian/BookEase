@@ -37,6 +37,9 @@ export default function ProfileScreen() {
     address: string;
     createdAt: Date;
     totalPoints: number;
+    booksToBePickedUp: any[];
+    completed: any[];
+    currentlyBorrowing: any[];
   }
 
   const handleUpdateProfile = async (field: keyof UserData, value: string) => {
@@ -50,6 +53,9 @@ export default function ProfileScreen() {
         address: userData?.address || '', 
         createdAt: userData?.createdAt || new Date(),
         totalPoints: userData?.totalPoints || 0,
+        booksToBePickedUp: userData?.booksToBePickedUp || [],
+        completed: userData?.completed || [],
+        currentlyBorrowing: userData?.currentlyBorrowing || [],
         [field]: value 
       };
       await addUser(user.uid, updatedData);

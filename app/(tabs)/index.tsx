@@ -4,7 +4,8 @@ import { Link, useRouter } from 'expo-router';
 import { auth } from '../../firebaseConfig';
 import { getUser, getAllUsers } from '@/hooks/useUser';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import { getBooks } from '@/hooks/useBook';
+import { getBooks, getBooksByGenres, getBookById } from '@/hooks/useBook';
+import { Timestamp } from 'firebase/firestore';
 
 export default function HomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -13,16 +14,17 @@ export default function HomeScreen() {
   const [totalBooksRead, setTotalBooksRead] = useState(0);
   const [totalDaysSpent, setTotalDaysSpent] = useState(0);
   const [userRank, setUserRank] = useState(0);
-  const [maybeYouLikeBooks, setMaybeYouLikeBooks] = useState([]);
+  const [maybeYouLikeBooks, setMaybeYouLikeBooks] = useState<any[]>([]);
   const [newReleaseBooks, setNewReleaseBooks] = useState([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [completedBooks, setCompletedBooks] = useState([]);
+  const [favoriteGenres, setFavoriteGenres] = useState([]);
   const router = useRouter();
 
   useEffect(() => {
     async function fetchUserData() {
-      const books = await getBooks();
       const user = auth.currentUser;
       if (user) {
         const data = await getUser(user.uid);
@@ -32,50 +34,58 @@ export default function HomeScreen() {
         // Get total points
         setTotalPoints(data?.totalPoints || 0);
 
-        // Menghitung total buku yang telah dibaca dari kolom "completed"
+        // Get completed books
         const completedBooks = data?.completed || [];
+        setCompletedBooks(completedBooks);
         setTotalBooksRead(completedBooks.length);
-  
-        // Menghitung total hari yang digunakan dengan pembulatan ke atas
+
+        // Calculate total days spent
         if (data?.createdAt) {
-          const createdAtTimestamp = data.createdAt.seconds * 1000; // Firestore Timestamp ke milidetik
+          const createdAtTimestamp = data.createdAt.seconds * 1000; // Firestore Timestamp to milliseconds
           const createdAtDate = new Date(createdAtTimestamp);
           const today = new Date();
           const millisecondsPerDay = 1000 * 60 * 60 * 24;
           const daysSpent = Math.ceil((today - createdAtDate) / millisecondsPerDay); 
           setTotalDaysSpent(daysSpent);
         }
-  
-        // Menghitung persentil pengguna berdasarkan jumlah buku yang dibaca
+
+        // Calculate user rank
         const allUsers = await getAllUsers();
         const sortedUsers = allUsers.sort((a, b) => b.totalBooksRead - a.totalBooksRead);
         const rank = sortedUsers.findIndex(u => u.id === user.uid) + 1;
         const percentile = ((sortedUsers.length - rank) / sortedUsers.length) * 100;
         setUserRank(percentile);
-  
-        // Menentukan genre yang paling banyak dari buku "completed"
+      }
+    }
+    fetchUserData();
+  }, []);
+
+  useEffect(() => {
+    async function fetchBookRecommendations() {
+      if (completedBooks.length > 0) {
+        // Determine most frequent genres from completed books
         const genreCounts: { [key: string]: number } = {};
-        completedBooks.forEach(bookId => {
-          const book = books.find(book => book.id === bookId) as { id: string, genres: string[] };
+        for (const completedBook of completedBooks) {
+          const book = await getBookById(completedBook.bookID);
           if (book) {
             book.genres.forEach(genre => {
               genreCounts[genre] = (genreCounts[genre] || 0) + 1;
             });
           }
-        });
-  
-        const favoriteGenre = completedBooks.length > 0 ? 
-          Object.keys(genreCounts).reduce((a, b) => genreCounts[a] > genreCounts[b] ? a : b, "") : "";
-  
-        // Mendapatkan buku random dari genre yang paling banyak, kecuali buku di "completed"
-        const maybeYouLike = completedBooks.length > 0 ? 
-          books.filter(book => book.genres.includes(favoriteGenre) && !completedBooks.includes(book.id)).slice(0, 10) :
-          books.sort(() => 0.5 - Math.random()).slice(0, 10);
-        setMaybeYouLikeBooks(maybeYouLike);
+        }
+
+        const favoriteGenres = Object.keys(genreCounts)
+          .sort((a, b) => genreCounts[b] - genreCounts[a])
+          .slice(0, 3); // Limit to top 3 genres
+        setFavoriteGenres(favoriteGenres);
+
+        // Fetch books from favorite genres for 'Maybe You Like' section
+        const maybeYouLikeBooksData = await getBooksByGenres(favoriteGenres);
+        setMaybeYouLikeBooks(maybeYouLikeBooksData);
       }
     }
-    fetchUserData();
-  }, []);
+    fetchBookRecommendations();
+  }, [completedBooks]);
 
   useEffect(() => {
     async function fetchBooksData() {
@@ -94,18 +104,22 @@ export default function HomeScreen() {
       const now = new Date();
       const dayInMs = 24 * 60 * 60 * 1000;
       
-      const dueNotifications = currentlyBorrowing
+      const dueNotifications = await Promise.all(currentlyBorrowing
         .filter(book => {
-          const dueDate = book.dueDate instanceof Date ? 
-            book.dueDate : 
+          const dueDate = book.dueDate instanceof Timestamp ? 
+            book.dueDate.toDate() : 
             new Date(book.dueDate);
           const timeLeft = dueDate.getTime() - now.getTime();
           return timeLeft > 0 && timeLeft <= dayInMs;
         })
-        .map(book => ({
-          id: book.bookID,
-          message: `Book ${book.bookID} is due in less than 24 hours!`,
-          dueDate: book.dueDate
+        .map(async book => {
+          const bookDetails = await getBookById(book.bookID);
+          const dueDate = book.dueDate instanceof Timestamp ? book.dueDate.toDate() : new Date(book.dueDate);
+          return {
+            id: book.bookID,
+            message: `Book '${bookDetails?.title}' is due in less than 24 hours!`,
+            dueDate: dueDate.toLocaleString() // Convert to readable date string
+          };
         }));
   
       setNotifications(dueNotifications);
@@ -148,7 +162,7 @@ export default function HomeScreen() {
           <View key={notif.id} style={styles.notificationItem}>
             <Text style={styles.notificationMessage}>{notif.message}</Text>
             <Text style={styles.notificationDate}>
-              Due: {new Date(notif.dueDate).toLocaleDateString()}
+              Due: Tommorow
             </Text>
           </View>
         ))
@@ -210,7 +224,7 @@ export default function HomeScreen() {
 
         {/* Maybe You Like */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Maybe You Like</Text>
+          <Text style={styles.sectionTitle}>Since You like {favoriteGenres.join(', ')}</Text>
           <FlatList
             horizontal
             data={maybeYouLikeBooks}
@@ -378,6 +392,19 @@ const styles = StyleSheet.create({
   notificationBadgeText: {
     color: '#fff',
     fontSize: 12,
+    fontWeight: 'bold',
+  },
+  bookItem: {
+    marginRight: 15,
+  },
+  bookCover: {
+    width: 100,
+    height: 150,
+    borderRadius: 5,
+  },
+  bookTitle: {
+    marginTop: 5,
+    fontSize: 14,
     fontWeight: 'bold',
   },
 });
