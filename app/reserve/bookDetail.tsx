@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Modal, Button } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Modal } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
-import { getBookAvailability, getLibraries, updateUserReservations } from '@/services/api'; 
+import { getFirestore, collection, doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { getBookAvailability, getLibraries } from '../../services/api';
+import { auth, db } from '../../firebaseConfig';
+
 
 export default function BookDetail() {
   const router = useRouter();
@@ -17,20 +20,27 @@ export default function BookDetail() {
   const [reserveTime, setReserveTime] = useState(1);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Parse genres from JSON string to array
   const parsedGenres = typeof genres === 'string' ? JSON.parse(genres) : [];
 
+  // Fetch data on libraries and availability
   useEffect(() => {
     async function fetchData() {
       try {
         const availableLibraryIDs = await getBookAvailability(bookID);
+        
+        // Pastikan array tidak kosong
+        if (availableLibraryIDs.length === 0) {
+          console.warn('No available libraries for this book.');
+          return;
+        }
+        
         const libraryDetails = await getLibraries(availableLibraryIDs);
         setLibraries(libraryDetails);
         if (libraryDetails.length > 0) {
-          setSelectedLibrary(parseInt(libraryDetails[0].id));
+          setSelectedLibrary(libraryDetails[0].perpusID); // Sesuaikan dengan field yang benar
         }
       } catch (error) {
-        console.error('Error fetching libraries:', error);
+        console.error("Error fetching libraries:", error);
       }
     }
     fetchData();
@@ -38,21 +48,55 @@ export default function BookDetail() {
 
   const handleCompleteReserve = async () => {
     try {
-      const bookPoint = Math.floor(Math.random() * 6) * 10 + 50; // Random: 50,60,70,80,90,100
-      await updateUserReservations({
+      const user = auth.current
+      const userDocRef = doc(db, "users", "GZ2pxoTfYafLz5upY1BeH3ihjVM2");
+      const userDoc = await getDoc(userDocRef);
+  
+      if (!userDoc.exists()) {
+        console.error("Dokumen pengguna tidak ada");
+        return;
+      }
+  
+      // Cek data yang akan digunakan
+      console.log("Data Reservasi:", {
         bookID,
-        perpusID: selectedLibrary,
+        selectedLibrary,
         pickupDate,
-        reserveTime,
-        bookPoint,
+        reserveTime
       });
+  
+      if (!bookID || !selectedLibrary || !pickupDate || !reserveTime) {
+        console.error("Data tidak lengkap atau tidak valid:", {
+          bookID,
+          selectedLibrary,
+          pickupDate,
+          reserveTime
+        });
+        return;
+      }
+  
+      // Mendapatkan bookPoint (perhitungan acak)
+      const bookPoint = Math.floor(Math.random() * 6) * 10 + 50;
+      console.log("Book Point:", bookPoint);
+  
+      // Update dokumen pengguna di Firestore
+      await updateDoc(userDocRef, {
+        reservations: arrayUnion({
+          bookID,
+          perpusID: selectedLibrary,
+          pickupDate: pickupDate.toISOString(),
+          reserveTime,
+          bookPoint,
+        }),
+      });
+  
       setModalVisible(false);
       router.back();
     } catch (error) {
-      console.error('Failed to complete reservation:', error);
-      // Handle error appropriately
+      console.error("Gagal melakukan reservasi:", error);
     }
   };
+  
 
   return (
     <SafeAreaView style={styles.container}>
@@ -94,11 +138,11 @@ export default function BookDetail() {
               style={styles.picker}
             >
               {libraries.map((library) => (
-                <Picker.Item key={library.id} label={library.name} value={library.id} />
+                <Picker.Item key={library.id} label={library.name} value={library.perpusID} />
               ))}
             </Picker>
             <Text style={styles.label}>Select Pickup Date:</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setShowDatePicker(true)}
               style={styles.dateButton}
             >
@@ -127,14 +171,14 @@ export default function BookDetail() {
               onValueChange={(newValue) => setReserveTime(newValue)}
             />
             <View style={styles.buttonContainer}>
-              <TouchableOpacity 
-                style={[styles.button, styles.cancelButton]} 
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
                 onPress={() => setModalVisible(false)}
               >
                 <Text style={styles.buttonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.button, styles.confirmButton]} 
+              <TouchableOpacity
+                style={[styles.button, styles.confirmButton]}
                 onPress={handleCompleteReserve}
               >
                 <Text style={styles.buttonText}>Complete Reserve</Text>
