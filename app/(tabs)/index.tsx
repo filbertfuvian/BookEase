@@ -11,7 +11,6 @@ export default function HomeScreen() {
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [totalBooksRead, setTotalBooksRead] = useState(0);
-  const [totalPagesRead, setTotalPagesRead] = useState(0);
   const [totalDaysSpent, setTotalDaysSpent] = useState(0);
   const [userRank, setUserRank] = useState(0);
   const [maybeYouLikeBooks, setMaybeYouLikeBooks] = useState([]);
@@ -29,14 +28,6 @@ export default function HomeScreen() {
         // Menghitung total buku yang telah dibaca dari kolom "completed"
         const completedBooks = data?.completed || [];
         setTotalBooksRead(completedBooks.length);
-  
-        // Menghitung total halaman yang telah dibaca dari buku di "completed"
-        const books = await getBooks();
-        const totalPages = completedBooks.reduce((total, bookId) => {
-          const book = books.find(book => book.id === bookId);
-          return total + (book ? book.pages : 0);
-        }, 0);
-        setTotalPagesRead(totalPages);
   
         // Menghitung total hari yang digunakan dengan pembulatan ke atas
         if (data?.createdAt) {
@@ -137,10 +128,6 @@ export default function HomeScreen() {
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{totalBooksRead}</Text>
               <Text style={styles.statLabel}>Books Read</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{totalPagesRead}</Text>
-              <Text style={styles.statLabel}>Pages Read</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{totalDaysSpent}</Text>

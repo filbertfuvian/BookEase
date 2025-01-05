@@ -1,22 +1,42 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Modal, Alert } from 'react-native';
 import { useState } from 'react';
 import { useRewards } from '@/hooks/useRewards';
 
 export default function RewardsScreen() {
-  const { rewards, points, pointsHistory, updatePoints } = useRewards();
+  const { rewards, totalPoints, pointsHistory, updatePoints } = useRewards();
   const [showHistory, setShowHistory] = useState(false);
+  const [selectedReward, setSelectedReward] = useState(null);  // State for selected reward
+  const [confirmVisible, setConfirmVisible] = useState(false);  // State for confirmation modal
 
-  const handleRedeem = async (reward) => {
-    if (points >= reward.points) {
-      await updatePoints(reward.points, `Redeemed ${reward.name}`, 'deduction');
-      alert('Reward redeemed successfully!');
+  const confirmRedeem = (reward) => {
+    setSelectedReward(reward);
+    setConfirmVisible(true);
+  };
+
+  const handleConfirm = async () => {
+    if (selectedReward && totalPoints >= selectedReward.points) {
+      try {
+        await updatePoints(selectedReward.points, `Redeemed ${selectedReward.name}`, 'deduction');
+        Alert.alert('Success', 'Reward redeemed successfully!');
+      } catch (error) {
+        Alert.alert('Error', 'Failed to redeem reward. Please try again.');
+      } finally {
+        setConfirmVisible(false);
+        setSelectedReward(null);
+      }
     } else {
-      alert('Not enough points to redeem this reward.');
+      Alert.alert('Insufficient Points', 'Not enough points to redeem this reward.');
+      setConfirmVisible(false);
     }
   };
 
+  const handleCancel = () => {
+    setConfirmVisible(false);
+    setSelectedReward(null);
+  };
+
   const renderReward = ({ item }) => (
-    <TouchableOpacity onPress={() => handleRedeem(item)} style={styles.rewardItem}>
+    <TouchableOpacity onPress={() => confirmRedeem(item)} style={styles.rewardItem}>
       <Text style={styles.rewardTitle}>{item.name}</Text>
       <Text style={styles.rewardPoints}>{item.points} points</Text>
     </TouchableOpacity>
@@ -34,7 +54,7 @@ export default function RewardsScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Rewards</Text>
       <View style={styles.pointsContainer}>
-        <Text style={styles.pointsText}>Points: {points}</Text>
+        <Text style={styles.pointsText}>Total Points: {totalPoints}</Text>
         <TouchableOpacity style={styles.historyButton} onPress={() => setShowHistory(true)}>
           <Text style={styles.historyButtonText}>Points History</Text>
         </TouchableOpacity>
@@ -65,6 +85,33 @@ export default function RewardsScreen() {
             <TouchableOpacity onPress={() => setShowHistory(false)} style={styles.closeButton}>
               <Text style={styles.closeButtonText}>Close</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={confirmVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={handleCancel}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirm Redemption</Text>
+            {selectedReward && (
+              <>
+                <Text style={styles.rewardDetail}>Reward: {selectedReward.name}</Text>
+                <Text style={styles.rewardDetail}>Points: {selectedReward.points}</Text>
+              </>
+            )}
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleConfirm} style={styles.confirmButton}>
+                <Text style={styles.buttonText}>Redeem</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -166,5 +213,34 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 14
+  },
+  rewardDetail: {
+    fontSize: 16,
+    marginBottom: 8
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16
+  },
+  cancelButton: {
+    backgroundColor: '#ddd',
+    padding: 8,
+    borderRadius: 8,
+    flex: 1,
+    marginRight: 8,
+    alignItems: 'center'
+  },
+  confirmButton: {
+    backgroundColor: '#4CAF50',
+    padding: 8,
+    borderRadius: 8,
+    flex: 1,
+    marginLeft: 8,
+    alignItems: 'center'
+  },
+  buttonText: {
+    fontSize: 14,
+    color: '#fff'
   }
 });

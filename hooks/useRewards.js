@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, arrayUnion, FieldValue } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
 import { auth } from '../firebaseConfig';
 
 const db = getFirestore();
 
 export function useRewards() {
   const [rewards, setRewards] = useState([]);
-  const [points, setPoints] = useState(0);
+  const [totalPoints, setTotalPoints] = useState(0);
   const [pointsHistory, setPointsHistory] = useState([]);
 
   useEffect(() => {
@@ -21,11 +21,12 @@ export function useRewards() {
           const history = userData.pointsHistory || [];
           setPointsHistory(history);
 
-          const totalPoints = history.reduce((total, entry) => {
+          // Calculate totalPoints
+          const totalPointsValue = history.reduce((total, entry) => {
             return entry.type === 'addition' ? total + entry.points : total - entry.points;
           }, 0);
 
-          setPoints(totalPoints);
+          setTotalPoints(userData.totalPoints || totalPointsValue);  // Ensure totalPoints is correctly set
         }
       }
     }
@@ -54,26 +55,16 @@ export function useRewards() {
         date: new Date().toISOString()
       };
 
-      if (type === 'addition') {
-        await updateDoc(userRef, {
-          totalPoints: FieldValue.increment(amount),
-          pointsHistory: arrayUnion(transaction)
-        });
-        setPoints(prevPoints => prevPoints + amount);
-      } else if (type === 'deduction') {
-        await updateDoc(userRef, {
-          totalPoints: FieldValue.increment(-amount),
-          pointsHistory: arrayUnion(transaction)
-        });
-        setPoints(prevPoints => prevPoints - amount);
-      }
+      // Update totalPoints based on the transaction type
+      await updateDoc(userRef, {
+        totalPoints: increment(type === 'addition' ? amount : -amount),
+        pointsHistory: arrayUnion(transaction)
+      });
 
-      setPointsHistory(prevHistory => [
-        ...prevHistory,
-        transaction
-      ]);
+      setTotalPoints(prevPoints => (type === 'addition' ? prevPoints + amount : prevPoints - amount));
+      setPointsHistory(prevHistory => [...prevHistory, transaction]);
     }
   };
 
-  return { rewards, points, pointsHistory, updatePoints };
+  return { rewards, totalPoints, pointsHistory, updatePoints };
 }
