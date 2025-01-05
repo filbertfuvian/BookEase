@@ -23,6 +23,7 @@ const MAPPING = {
   'bell.fill': 'notifications',
   'person.fill': 'person',
   'rectangle.portrait.and.arrow.right': 'logout',
+  'x': 'close',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],
