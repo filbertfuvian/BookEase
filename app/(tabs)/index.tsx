@@ -19,18 +19,22 @@ export default function HomeScreen() {
   const [totalBooksRead, setTotalBooksRead] = useState(0);
   const [totalDaysSpent, setTotalDaysSpent] = useState(0);
   const [userRank, setUserRank] = useState(0);
-  const [maybeYouLikeBooks, setMaybeYouLikeBooks] = useState<Book[]>([]);
-  const [newReleaseBooks, setNewReleaseBooks] = useState<Book[]>([]);
-  const [books, setBooks] = useState<Book[]>([]);  // Initialize books state
+  const [maybeYouLikeBooks, setMaybeYouLikeBooks] = useState([]);
+  const [newReleaseBooks, setNewReleaseBooks] = useState([]);
+  const [totalPoints, setTotalPoints] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
     async function fetchUserData() {
+      const books = await getBooks();
       const user = auth.currentUser;
       if (user) {
         const data = await getUser(user.uid);
         setProfilePicture(data?.profilePicture || null);
         setUserName(data?.name || null);
+
+        // Get total points
+        setTotalPoints(data?.totalPoints || 0);
 
         // Menghitung total buku yang telah dibaca dari kolom "completed"
         const completedBooks: string[] = data?.completed || [];
@@ -58,9 +62,9 @@ export default function HomeScreen() {
         setBooks(booksData);  // Set books state
 
         // Menentukan genre yang paling banyak dari buku "completed"
-        const genreCounts: Record<string, number> = {};
+        const genreCounts: { [key: string]: number } = {};
         completedBooks.forEach(bookId => {
-          const book = booksData.find(book => book.id === bookId);
+          const book = books.find(book => book.id === bookId) as { id: string, genres: string[] };
           if (book) {
             book.genres.forEach(genre => {
               genreCounts[genre] = (genreCounts[genre] || 0) + 1;
@@ -139,6 +143,10 @@ export default function HomeScreen() {
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{totalBooksRead}</Text>
               <Text style={styles.statLabel}>Books Read</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{totalPoints}</Text>
+              <Text style={styles.statLabel}>Points</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{totalDaysSpent}</Text>
