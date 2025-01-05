@@ -154,6 +154,13 @@ export default function ProfileScreen() {
           <Text style={styles.sectionButtonText}>Change Address</Text>
           <Text style={styles.previewText}>{userData.address}</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.sectionButton}
+          onPress={() => router.push('/admin')}
+        >
+          <IconSymbol name="person.fill" size={24} color="#000" style={styles.icon} />
+          <Text style={styles.sectionButtonText}>Admin Dashboard</Text>
+        </TouchableOpacity>
       </View>
 
       <UpdateModal

@@ -25,11 +25,11 @@ export default function HomeScreen() {
         const data = await getUser(user.uid);
         setProfilePicture(data?.profilePicture || null);
         setUserName(data?.name || null);
-
+  
         // Menghitung total buku yang telah dibaca dari kolom "completed"
         const completedBooks = data?.completed || [];
         setTotalBooksRead(completedBooks.length);
-
+  
         // Menghitung total halaman yang telah dibaca dari buku di "completed"
         const books = await getBooks();
         const totalPages = completedBooks.reduce((total, bookId) => {
@@ -37,21 +37,24 @@ export default function HomeScreen() {
           return total + (book ? book.pages : 0);
         }, 0);
         setTotalPagesRead(totalPages);
-
+  
         // Menghitung total hari yang digunakan dengan pembulatan ke atas
-        const createdAt = new Date(data?.createdAt);
-        const today = new Date();
-        const millisecondsPerDay = 1000 * 60 * 60 * 24;
-        const daysSpent = Math.ceil((today - createdAt) / millisecondsPerDay); 
-        setTotalDaysSpent(daysSpent);
-
+        if (data?.createdAt) {
+          const createdAtTimestamp = data.createdAt.seconds * 1000; // Firestore Timestamp ke milidetik
+          const createdAtDate = new Date(createdAtTimestamp);
+          const today = new Date();
+          const millisecondsPerDay = 1000 * 60 * 60 * 24;
+          const daysSpent = Math.ceil((today - createdAtDate) / millisecondsPerDay); 
+          setTotalDaysSpent(daysSpent);
+        }
+  
         // Menghitung persentil pengguna berdasarkan jumlah buku yang dibaca
-        const allUsers = await getAllUsers(); 
+        const allUsers = await getAllUsers();
         const sortedUsers = allUsers.sort((a, b) => b.totalBooksRead - a.totalBooksRead);
         const rank = sortedUsers.findIndex(u => u.id === user.uid) + 1;
         const percentile = ((sortedUsers.length - rank) / sortedUsers.length) * 100;
         setUserRank(percentile);
-
+  
         // Menentukan genre yang paling banyak dari buku "completed"
         const genreCounts = {};
         completedBooks.forEach(bookId => {
@@ -62,10 +65,10 @@ export default function HomeScreen() {
             });
           }
         });
-
+  
         const favoriteGenre = completedBooks.length > 0 ? 
           Object.keys(genreCounts).reduce((a, b) => genreCounts[a] > genreCounts[b] ? a : b, "") : "";
-
+  
         // Mendapatkan buku random dari genre yang paling banyak, kecuali buku di "completed"
         const maybeYouLike = completedBooks.length > 0 ? 
           books.filter(book => book.genres.includes(favoriteGenre) && !completedBooks.includes(book.id)).slice(0, 10) :

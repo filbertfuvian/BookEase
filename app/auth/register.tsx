@@ -22,7 +22,7 @@ export default function RegisterScreen() {
         phoneNumber: '',
         address: '',
         name: user.email,
-        CreatedAt: new Date(),
+        createdAt: new Date(),
         totalPoints: 0,
       };
       await addUser(user.uid, userData);

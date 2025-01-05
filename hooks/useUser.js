@@ -30,3 +30,13 @@ export async function getAllUsers() {
     });
     return users;
 }
+
+export async function updateUser(userId, updatedData) {
+  try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, updatedData);
+      console.log(`User with ID ${userId} has been updated.`);
+  } catch (e) {
+      console.error('Error updating user data: ', e);
+  }
+}
