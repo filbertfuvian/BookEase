@@ -29,9 +29,12 @@ export default function ProfileScreen() {
 
   interface UserData {
     profilePicture: string;
+    email: string;
     name: string;
     phoneNumber: string;
     address: string;
+    createdAt: Date;
+    totalPoints: number;
   }
 
   const handleUpdateProfile = async (field: keyof UserData, value: string) => {
@@ -39,9 +42,12 @@ export default function ProfileScreen() {
     if (user) {
       const updatedData: UserData = { 
         profilePicture: userData?.profilePicture || '', 
+        email: userData?.email || '',
         name: userData?.name || '', 
         phoneNumber: userData?.phoneNumber || '', 
         address: userData?.address || '', 
+        createdAt: userData?.createdAt || new Date(),
+        totalPoints: userData?.totalPoints || 0,
         [field]: value 
       };
       await addUser(user.uid, updatedData);

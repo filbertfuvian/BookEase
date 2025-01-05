@@ -22,11 +22,15 @@ export default function BookDetail() {
 
   useEffect(() => {
     async function fetchData() {
-      const availableIDs = await getBookAvailability(bookID);
-      const libraryDetails = await getLibraries(availableIDs);
-      setLibraries(libraryDetails);
-      if (libraryDetails.length > 0) {
-        setSelectedLibrary(libraryDetails[0].id);
+      try {
+        const availableLibraryIDs = await getBookAvailability(bookID);
+        const libraryDetails = await getLibraries(availableLibraryIDs);
+        setLibraries(libraryDetails);
+        if (libraryDetails.length > 0) {
+          setSelectedLibrary(parseInt(libraryDetails[0].id));
+        }
+      } catch (error) {
+        console.error('Error fetching libraries:', error);
       }
     }
     fetchData();
