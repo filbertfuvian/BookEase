@@ -241,13 +241,12 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
   },
   card: {
-    width: 210,
+    width: 175,
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
     padding: 10,
     marginBottom: 20,
     marginHorizontal: 5,
-    alignItems: 'center',
   },
   cardImage: {
     width: '100%',
