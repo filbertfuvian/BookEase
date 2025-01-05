@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { useState, useEffect } from 'react';
-import { auth } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
 import { getUser } from '@/hooks/useUser';
 import { getBooks } from '@/hooks/useBook';
+import { getLibraries } from '../../services/api';
 
 export default function HistoryScreen() {
   const [activeTab, setActiveTab] = useState<'waiting' | 'borrowing' | 'completed'>('waiting');
@@ -10,6 +11,7 @@ export default function HistoryScreen() {
   const [borrowingBooks, setBorrowingBooks] = useState([]);
   const [completedBooks, setCompletedBooks] = useState([]);
   const [books, setBooks] = useState([]);
+  const [libraries, setLibraries] = useState([]);
 
   useEffect(() => {
     async function fetchData() {
@@ -19,12 +21,28 @@ export default function HistoryScreen() {
         const booksData = await getBooks();
         setBooks(booksData);
 
+        const libraryIDs = [
+          ...new Set([
+            ...(data?.booksToBePickedUp || []).map(book => book.perpusID),
+            ...(data?.currentlyBorrowing || []).map(book => book.perpusID),
+            ...(data?.completed || []).map(book => book.perpusID),
+          ])
+        ];
+        
+        const librariesData = await getLibraries(libraryIDs);
+        if (!librariesData || librariesData.length === 0) {
+          console.error("Tidak ada data perpustakaan yang ditemukan.");
+          return;
+        }
+
         const formatBookData = (bookArray) => {
           return bookArray.map(book => {
-            const bookInfo = booksData.find(b => b.id === book.bookId);
+            const bookInfo = booksData.find(b => b.id === book.bookID);
+            const libraryInfo = librariesData.find(l => l.perpusID === book.perpusID);
             return {
               ...book,
-              title: bookInfo?.title || 'Unknown Title'
+              title: bookInfo?.title || 'Unknown Title',
+              libraryName: libraryInfo?.name || 'Unknown Library'
             };
           });
         };
@@ -35,18 +53,16 @@ export default function HistoryScreen() {
       }
     }
     fetchData();
-  }, []);
+  }, [libraries]);
 
-  const calculateTimeLeft = (dueDate) => {
+  const calculateTimeLeft = (pickupDate) => {
     const now = new Date();
-    const diff = new Date(dueDate) - now;
+    const diff = new Date(pickupDate) - now;
 
     if (diff <= 0) {
       return {
         expired: true,
-        days: 0,
-        hours: 0,
-        minutes: 0
+        timeLeft: 'Expired'
       };
     }
 
@@ -54,35 +70,35 @@ export default function HistoryScreen() {
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
-    return {
-      expired: false,
-      days,
-      hours,
-      minutes
-    };
+    if (days > 1) {
+      return { expired: false, timeLeft: `${days} days left` };
+    } else if (hours > 1) {
+      return { expired: false, timeLeft: `${hours} hours left` };
+    } else if (minutes >= 1) {
+      return { expired: false, timeLeft: `${minutes} minutes left` };
+    } else {
+      return { expired: false, timeLeft: 'Less than 1 minute left' };
+    }
   };
 
   const renderWaiting = () => {
-    const today = new Date();
     return (
       <FlatList
         data={waitingBooks}
-        keyExtractor={(item) => item.bookId}
+        keyExtractor={(item) => item.bookID.toString()}
         renderItem={({ item }) => {
-          const timeLeft = calculateTimeLeft(item.pickupDueDate);
-          const pickupDueDateStyle = timeLeft.days <= 3 ? styles.dueDateRed : styles.dueDateBlack;
+          const { expired, timeLeft } = calculateTimeLeft(item.pickupDate);
+          const timeLeftStyle = expired ? styles.expired : styles.timeLeft;
           return (
             <View style={styles.item}>
               <View>
                 <Text style={styles.bold}>{item.title}</Text>
-                <Text>{item.library}</Text>
+                <Text>{item.libraryName}</Text>
               </View>
-              {timeLeft.expired ? (
+              {expired ? (
                 <Text style={styles.expired}>Reservation Expired</Text>
               ) : (
-                <Text style={pickupDueDateStyle}>
-                  {timeLeft.days} days, {timeLeft.hours} hours, {timeLeft.minutes} minutes left
-                </Text>
+                <Text style={timeLeftStyle}>{timeLeft}</Text>
               )}
             </View>
           );
@@ -92,26 +108,23 @@ export default function HistoryScreen() {
   };
 
   const renderBorrowing = () => {
-    const today = new Date();
     return (
       <FlatList
         data={borrowingBooks}
-        keyExtractor={(item) => item.bookId}
+        keyExtractor={(item) => item.bookID.toString()}
         renderItem={({ item }) => {
-          const timeLeft = calculateTimeLeft(item.dueDate);
-          const dueDateStyle = timeLeft.days <= 3 ? styles.dueDateRed : styles.dueDateBlack;
+          const { expired, timeLeft } = calculateTimeLeft(item.pickupDate);
+          const timeLeftStyle = expired ? styles.warning : styles.timeLeft;
           return (
             <View style={styles.item}>
               <View>
                 <Text style={styles.bold}>{item.title}</Text>
-                <Text>{item.library}</Text>
+                <Text>{item.libraryName}</Text>
               </View>
-              {timeLeft.expired ? (
+              {expired ? (
                 <Text style={styles.warning}>Warning</Text>
               ) : (
-                <Text style={dueDateStyle}>
-                  {timeLeft.days} days, {timeLeft.hours} hours, {timeLeft.minutes} minutes left
-                </Text>
+                <Text style={timeLeftStyle}>{timeLeft}</Text>
               )}
             </View>
           );
@@ -123,12 +136,12 @@ export default function HistoryScreen() {
   const renderCompleted = () => (
     <FlatList
       data={completedBooks}
-      keyExtractor={(item) => item.bookId}
+      keyExtractor={(item) => item.bookID.toString()}
       renderItem={({ item }) => (
         <View style={styles.item}>
           <View>
             <Text style={styles.bold}>{item.title}</Text>
-            <Text>{item.library}</Text>
+            <Text>{item.libraryName}</Text>
           </View>
           <Text>{item.bookPoint} points</Text>
         </View>
@@ -210,8 +223,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee'
   },
   bold: { fontWeight: 'bold' },
-  dueDateRed: { color: 'orange' },
-  dueDateBlack: { color: 'black' },
+  timeLeft: { color: 'black' },
   expired: { color: 'red', fontWeight: 'bold' },
   warning: { color: 'red', fontWeight: 'bold' },
   tabText: {

@@ -50,6 +50,7 @@ const getBookAvailability = async (bookID: string) => {
 };
 
 // Fetch library details based on library IDs
+// Fetch library details based on library IDs
 export async function getLibraries(libraryIDs: number[]) {
   try {
     if (!libraryIDs || libraryIDs.length === 0) {
@@ -63,10 +64,12 @@ export async function getLibraries(libraryIDs: number[]) {
 
     const querySnapshot = await getDocs(q);
     querySnapshot.forEach(doc => {
+      const data = doc.data();
       libraries.push({
         id: doc.id,
-        name: doc.data().name,
-        perpusID: doc.data().perpusID,
+        name: data.name,
+        // Pastikan perpusID adalah angka
+        perpusID: Number(data.perpusID),
       });
     });
 
@@ -76,6 +79,7 @@ export async function getLibraries(libraryIDs: number[]) {
     return [];  // Kembalikan array kosong jika terjadi error
   }
 }
+
 
 // Update user reservations
 export async function updateUserReservations(reservation: {
