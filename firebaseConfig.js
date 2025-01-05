@@ -4,12 +4,12 @@ import { getFirestore } from 'firebase/firestore';
 
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyDSwR7-zHvNd2VeAw8MGk-530C9vcZEmPk',
-  authDomain: 'book-ease-ffa7f.firebaseapp.com',
-  projectId: 'book-ease-ffa7f',
-  storageBucket: 'book-ease-ffa7f.firebasestorage.app',
-  messagingSenderId: '360858297727',
-  appId: '1:360858297727:android:84c816f41de078932aa64a',
+  apiKey: 'AIzaSyACuDOqVel6OdBSEE6HSQ1092nSMfPZm4Y',
+  authDomain: 'bookease2-1d725.firebaseapp.com',
+  projectId: 'bookease2-1d725',
+  storageBucket: 'bookease2-1d725.firebasestorage.app',
+  messagingSenderId: '221878713212',
+  appId: '1:221878713212:android:5383e8fe71110dddce42f9',
 };
 
 const app = initializeApp(firebaseConfig);
