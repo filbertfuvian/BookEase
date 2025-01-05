@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Modal, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Modal, FlatList, Alert } from 'react-native';
 import { getAllUsers, updateUser } from '@/hooks/useUser';
 import { useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '@/firebaseConfig';
 
 interface Book {
   bookID: string;
@@ -61,48 +63,109 @@ export default function AdminScreen() {
 
   const handleBookPickedUp = async (user: User, book: Book) => {
     if (!user.booksToBePickedUp) return;
-    const newBooksToBePickedUp = user.booksToBePickedUp.filter((b) => b.bookID !== book.bookID);
-    const dueDate = new Date((book.pickupDate as Date).getTime() + (book.reserveTime || 0) * 86400000);
-    const newBorrowingItem: Book = {
-      bookID: book.bookID,
-      perpusID: book.perpusID,
-      dueDate,
-      bookPoint: book.bookPoint,
-    };
 
-    const updatedUser: User = {
-      ...user,
-      booksToBePickedUp: newBooksToBePickedUp,
-      currentlyBorrowing: [...(user.currentlyBorrowing || []), newBorrowingItem],
-    };
+    try {
+      // Update book availability first
+      const bookRef = doc(db, 'books', book.bookID);
+      const bookDoc = await getDoc(bookRef);
+      
+      if (bookDoc.exists()) {
+        const bookData = bookDoc.data();
+        const perpusList = bookData.perpus || [];
+        
+        // Update availability for matching perpusID
+        const updatedPerpusList = perpusList.map((p: any) => {
+          if (p.perpusID === book.perpusID) {
+            return { ...p, available: false };
+          }
+          return p;
+        });
 
-    await updateUser(user.id, updatedUser);
-    await refreshPage();
+        // Update book document
+        await updateDoc(bookRef, {
+          perpus: updatedPerpusList
+        });
+
+        // Remove from booksToBePickedUp
+        const newBooksToBePickedUp = user.booksToBePickedUp.filter(
+          (b) => b.bookID !== book.bookID
+        );
+
+        // Add to currentlyBorrowing with validated data
+        const borrowingBook = {
+          bookID: book.bookID,
+          perpusID: book.perpusID,
+          bookPoint: book.bookPoint || 0,
+          dueDate: new Date(Date.now() + (book.reserveTime || 7) * 24 * 60 * 60 * 1000)
+        };
+
+        // Update user data
+        const updatedUser = {
+          ...user,
+          booksToBePickedUp: newBooksToBePickedUp,
+          currentlyBorrowing: [...(user.currentlyBorrowing || []), borrowingBook]
+        };
+
+        await updateUser(user.id, updatedUser);
+        await refreshPage();
+      }
+    } catch (error) {
+      console.error('Error picking up book:', error);
+      Alert.alert('Error', 'Failed to pick up book. Please try again.');
+    }
   };
 
   const handleBookReturned = async (user: User, book: Book) => {
     if (!user.currentlyBorrowing) return;
 
-    const newCurrentlyBorrowing = user.currentlyBorrowing.filter((b) => b.bookID !== book.bookID);
-    const newCompleted = [
-      ...(user.completed || []),
-      {
-        bookID: book.bookID,
-        perpusID: book.perpusID,
-        dueDate: book.dueDate instanceof Date ? book.dueDate : new Date(book.dueDate),
-        bookPoint: book.bookPoint,
-      },
-    ];
+    try {
+      // Update book availability first
+      const bookRef = doc(db, 'books', book.bookID);
+      const bookDoc = await getDoc(bookRef);
+      
+      if (bookDoc.exists()) {
+        const bookData = bookDoc.data();
+        const perpusList = bookData.perpus || [];
+        
+        // Update availability for matching perpusID
+        const updatedPerpusList = perpusList.map((p: any) => {
+          if (p.perpusID === book.perpusID) {
+            return { ...p, available: true };
+          }
+          return p;
+        });
 
-    const updatedUser: User = {
-      ...user,
-      currentlyBorrowing: newCurrentlyBorrowing,
-      completed: newCompleted,
-      totalPoints: (user.totalPoints || 0) + book.bookPoint, // Update totalPoints
-    };
+        // Update book document
+        await updateDoc(bookRef, {
+          perpus: updatedPerpusList
+        });
+      }
 
-    await updateUser(user.id, updatedUser);
-    await refreshPage();
+      // Continue with existing book return logic
+      const newCurrentlyBorrowing = user.currentlyBorrowing.filter((b) => b.bookID !== book.bookID);
+      const newCompleted = [
+        ...(user.completed || []),
+        {
+          bookID: book.bookID,
+          perpusID: book.perpusID,
+          dueDate: book.dueDate instanceof Date ? book.dueDate : new Date(book.dueDate),
+          bookPoint: book.bookPoint,
+        },
+      ];
+
+      const updatedUser = {
+        ...user,
+        currentlyBorrowing: newCurrentlyBorrowing,
+        completed: newCompleted,
+        totalPoints: (user.totalPoints || 0) + book.bookPoint,
+      };
+
+      await updateUser(user.id, updatedUser);
+      await refreshPage();
+    } catch (error) {
+      console.error('Error returning book:', error);
+      Alert.alert('Error', 'Failed to return book. Please try again.');
+    }
   };
 
   const renderBooksToBePickedUp = (user: User) => (
