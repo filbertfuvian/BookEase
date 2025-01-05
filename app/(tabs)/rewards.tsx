@@ -44,18 +44,14 @@ export default function RewardsScreen() {
 
   const renderHistory = ({ item }) => (
     <View style={styles.historyItem}>
-      <View>
-        <Text style={styles.historyActivity}>{item.activity}</Text>
-        <Text style={styles.historyDate}>
-          {new Date(item.date.seconds * 1000).toLocaleDateString()}
-        </Text>
-      </View>
+      <Text style={styles.historyActivity}>{item.activity}</Text>
       <Text style={[
         styles.historyPoints,
         item.type === 'addition' ? styles.additionPoints : styles.deductionPoints
       ]}>
         {item.type === 'addition' ? '+' : '-'}{item.points}
       </Text>
+      <Text style={styles.historyDate}>{new Date(item.date).toLocaleString()}</Text>
     </View>
   );
 
