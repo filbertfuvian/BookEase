@@ -15,16 +15,21 @@ export default function HomeScreen() {
   const [userRank, setUserRank] = useState(0);
   const [maybeYouLikeBooks, setMaybeYouLikeBooks] = useState([]);
   const [newReleaseBooks, setNewReleaseBooks] = useState([]);
+  const [totalPoints, setTotalPoints] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
     async function fetchUserData() {
+      const books = await getBooks();
       const user = auth.currentUser;
       if (user) {
         const data = await getUser(user.uid);
         setProfilePicture(data?.profilePicture || null);
         setUserName(data?.name || null);
-  
+
+        // Get total points
+        setTotalPoints(data?.totalPoints || 0);
+
         // Menghitung total buku yang telah dibaca dari kolom "completed"
         const completedBooks = data?.completed || [];
         setTotalBooksRead(completedBooks.length);
@@ -47,9 +52,9 @@ export default function HomeScreen() {
         setUserRank(percentile);
   
         // Menentukan genre yang paling banyak dari buku "completed"
-        const genreCounts = {};
+        const genreCounts: { [key: string]: number } = {};
         completedBooks.forEach(bookId => {
-          const book = books.find(book => book.id === bookId);
+          const book = books.find(book => book.id === bookId) as { id: string, genres: string[] };
           if (book) {
             book.genres.forEach(genre => {
               genreCounts[genre] = (genreCounts[genre] || 0) + 1;
@@ -128,6 +133,10 @@ export default function HomeScreen() {
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{totalBooksRead}</Text>
               <Text style={styles.statLabel}>Books Read</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{totalPoints}</Text>
+              <Text style={styles.statLabel}>Points</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{totalDaysSpent}</Text>
