@@ -90,7 +90,11 @@ export default function HomeScreen() {
   const handleBookPress = (book) => {
     router.push({
       pathname: '../reserve/bookDetail',
-      params: { title: book.title, genres: JSON.stringify(book.genres) },
+      params: {
+        bookID: book.id,
+        title: book.title,
+        genres: JSON.stringify(book.genres)
+      }
     });
   };
 

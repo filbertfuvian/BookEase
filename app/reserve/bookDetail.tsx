@@ -4,7 +4,7 @@ import { Picker } from '@react-native-picker/picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
-import { getFirestore, collection, doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import {  doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { getBookAvailability, getLibraries } from '../../services/api';
 import { auth, db } from '../../firebaseConfig';
@@ -12,7 +12,19 @@ import { auth, db } from '../../firebaseConfig';
 
 export default function BookDetail() {
   const router = useRouter();
-  const { title, genres, bookID } = useLocalSearchParams();
+  const params = useLocalSearchParams();
+  
+  // Debug raw params
+  console.log('Raw params:', params);
+  
+  // Safe extraction with defaults
+  const bookID = params?.bookID?.toString() || '';
+  const title = params?.title?.toString() || '';
+  const genres = params?.genres?.toString() || '[]';
+
+  // Debug extracted values
+  console.log('Extracted values:', { bookID, title, genres });
+
   const [modalVisible, setModalVisible] = useState(false);
   const [libraries, setLibraries] = useState([]);
   const [selectedLibrary, setSelectedLibrary] = useState(null);
@@ -48,8 +60,8 @@ export default function BookDetail() {
 
   const handleCompleteReserve = async () => {
     try {
-      const user = auth.current
-      const userDocRef = doc(db, "users", "GZ2pxoTfYafLz5upY1BeH3ihjVM2");
+      const user = auth.currentUser;
+      const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
   
       if (!userDoc.exists()) {
@@ -105,6 +117,7 @@ export default function BookDetail() {
           <IconSymbol name="chevron.left" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.header}>Book Selection</Text>
+        <Text style={styles.bookIdText}>Book ID: {bookID}</Text>
       </View>
       <ScrollView contentContainerStyle={styles.contentContainer}>
         <Image source={require('@/assets/images/book-template.png')} style={styles.bookImage} />
@@ -131,6 +144,7 @@ export default function BookDetail() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Complete Reservation</Text>
+            <Text style={styles.bookIdText}>Book ID: {bookID || 'Not available'}</Text>
             <Text style={styles.label}>Select Library:</Text>
             <Picker
               selectedValue={selectedLibrary}
@@ -312,5 +326,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     fontWeight: 'bold',
+  },
+  bookIdText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 15,
+    textAlign: 'center',
   },
 });

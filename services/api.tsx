@@ -89,3 +89,5 @@ export async function updateUserReservations(reservation: {
     booksToBePickedUp: arrayUnion(reservation)
   });
 }
+
+export { getBookAvailability };
