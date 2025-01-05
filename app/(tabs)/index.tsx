@@ -1,10 +1,16 @@
-import { View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, FlatList } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, FlatList, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
 import { Link, useRouter } from 'expo-router';
 import { auth } from '../../firebaseConfig';
 import { getUser, getAllUsers } from '@/hooks/useUser';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { getBooks } from '@/hooks/useBook';
+
+interface Book {
+  id: string;
+  title: string;
+  genres: string[];
+}
 
 export default function HomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -31,26 +37,30 @@ export default function HomeScreen() {
         setTotalPoints(data?.totalPoints || 0);
 
         // Menghitung total buku yang telah dibaca dari kolom "completed"
-        const completedBooks = data?.completed || [];
+        const completedBooks: string[] = data?.completed || [];
         setTotalBooksRead(completedBooks.length);
-  
+
         // Menghitung total hari yang digunakan dengan pembulatan ke atas
         if (data?.createdAt) {
           const createdAtTimestamp = data.createdAt.seconds * 1000; // Firestore Timestamp ke milidetik
           const createdAtDate = new Date(createdAtTimestamp);
           const today = new Date();
           const millisecondsPerDay = 1000 * 60 * 60 * 24;
-          const daysSpent = Math.ceil((today - createdAtDate) / millisecondsPerDay); 
+          const daysSpent = Math.ceil((today.getTime() - createdAtDate.getTime()) / millisecondsPerDay);
           setTotalDaysSpent(daysSpent);
         }
-  
+
         // Menghitung persentil pengguna berdasarkan jumlah buku yang dibaca
         const allUsers = await getAllUsers();
         const sortedUsers = allUsers.sort((a, b) => b.totalBooksRead - a.totalBooksRead);
         const rank = sortedUsers.findIndex(u => u.id === user.uid) + 1;
         const percentile = ((sortedUsers.length - rank) / sortedUsers.length) * 100;
         setUserRank(percentile);
-  
+
+        // Mendapatkan buku dari Firestore
+        const booksData = await getBooks();
+        setBooks(booksData);  // Set books state
+
         // Menentukan genre yang paling banyak dari buku "completed"
         const genreCounts: { [key: string]: number } = {};
         completedBooks.forEach(bookId => {
@@ -61,14 +71,14 @@ export default function HomeScreen() {
             });
           }
         });
-  
+
         const favoriteGenre = completedBooks.length > 0 ? 
           Object.keys(genreCounts).reduce((a, b) => genreCounts[a] > genreCounts[b] ? a : b, "") : "";
-  
+
         // Mendapatkan buku random dari genre yang paling banyak, kecuali buku di "completed"
         const maybeYouLike = completedBooks.length > 0 ? 
-          books.filter(book => book.genres.includes(favoriteGenre) && !completedBooks.includes(book.id)).slice(0, 10) :
-          books.sort(() => 0.5 - Math.random()).slice(0, 10);
+          booksData.filter(book => book.genres.includes(favoriteGenre) && !completedBooks.includes(book.id)).slice(0, 10) :
+          booksData.sort(() => 0.5 - Math.random()).slice(0, 10);
         setMaybeYouLikeBooks(maybeYouLike);
       }
     }
@@ -77,13 +87,13 @@ export default function HomeScreen() {
 
   useEffect(() => {
     async function fetchBooksData() {
-      const books = await getBooks();
-      setNewReleaseBooks(books.slice(0, 10));
+      const booksData = await getBooks();
+      setNewReleaseBooks(booksData.slice(0, 10));
     }
     fetchBooksData();
   }, []);
 
-  const handleBookPress = (book) => {
+  const handleBookPress = (book: Book) => {
     router.push({
       pathname: '../reserve/bookDetail',
       params: {
@@ -94,7 +104,7 @@ export default function HomeScreen() {
     });
   };
 
-  const renderBookItem = ({ item }) => (
+  const renderBookItem = ({ item }: { item: Book }) => (
     <TouchableOpacity key={item.id} style={styles.card} onPress={() => handleBookPress(item)}>
       <Image source={require('@/assets/images/book-template.png')} style={styles.cardImage} />
       <Text style={styles.cardTitle}>{item.title}</Text>
