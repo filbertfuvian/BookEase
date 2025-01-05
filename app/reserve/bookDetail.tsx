@@ -93,7 +93,7 @@ export default function BookDetail() {
   
       // Update dokumen pengguna di Firestore
       await updateDoc(userDocRef, {
-        reservations: arrayUnion({
+        booksToBePickedUp: arrayUnion({
           bookID,
           perpusID: selectedLibrary,
           pickupDate: pickupDate.toISOString(),
