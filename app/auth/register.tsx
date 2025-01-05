@@ -21,7 +21,9 @@ export default function RegisterScreen() {
         profilePicture: 'https://via.placeholder.com/100',
         phoneNumber: '',
         address: '',
-        name: 'user.email',
+        name: user.email,
+        CreatedAt: new Date(),
+        totalPoints: 0,
       };
       await addUser(user.uid, userData);
 
