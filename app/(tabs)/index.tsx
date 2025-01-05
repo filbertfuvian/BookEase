@@ -4,6 +4,7 @@ import { Link, useRouter } from 'expo-router';
 import { auth } from '../../firebaseConfig';
 import { getUser, getAllUsers } from '@/hooks/useUser';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { getBooks } from '@/hooks/useBook';
 
 export default function HomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
