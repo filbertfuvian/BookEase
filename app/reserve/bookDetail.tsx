@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Modal } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Modal, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -59,56 +59,108 @@ export default function BookDetail() {
   }, [bookID]);
 
   const handleCompleteReserve = async () => {
+    if (!selectedLibrary) {
+      Alert.alert('Error', 'Please select a library');
+      return;
+    }
+  
     try {
       const user = auth.currentUser;
-      const userDocRef = doc(db, "users", user.uid);
-      const userDoc = await getDoc(userDocRef);
-  
-      if (!userDoc.exists()) {
-        console.error("Dokumen pengguna tidak ada");
+      if (!user) {
+        Alert.alert('Error', 'Please login first');
         return;
       }
   
-      // Cek data yang akan digunakan
-      console.log("Data Reservasi:", {
-        bookID,
-        selectedLibrary,
-        pickupDate,
-        reserveTime
-      });
+      // Check network connection
+      const userDocRef = doc(db, 'users', user.uid);
+      let retries = 3;
+      
+      while (retries > 0) {
+        try {
+          const userDoc = await getDoc(userDocRef);
+          if (!userDoc.exists()) {
+            Alert.alert('Error', 'User document not found');
+            return;
+          }
+          break;
+        } catch (error) {
+          retries--;
+          if (retries === 0) {
+            Alert.alert(
+              'Network Error', 
+              'Please check your internet connection and try again'
+            );
+            return;
+          }
+          // Wait 1 second before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
   
-      if (!bookID || !selectedLibrary || !pickupDate || !reserveTime) {
-        console.error("Data tidak lengkap atau tidak valid:", {
-          bookID,
-          selectedLibrary,
-          pickupDate,
-          reserveTime
+      // Update book availability
+      const bookRef = doc(db, 'books', bookID);
+      const bookDoc = await getDoc(bookRef);
+      
+      if (bookDoc.exists()) {
+        const bookData = bookDoc.data();
+        const perpusList = bookData.perpus || [];
+        
+        const updatedPerpusList = perpusList.map((p: any) => {
+          if (p.perpusID === selectedLibrary) {
+            return { ...p, available: false };
+          }
+          return p;
         });
-        return;
+  
+        await updateDoc(bookRef, {
+          perpus: updatedPerpusList
+        });
+  
+        // Add reservation data
+        await updateDoc(userDocRef, {
+          booksToBePickedUp: arrayUnion({
+            bookID,
+            perpusID: selectedLibrary,
+            pickupDate,
+            reserveTime,
+            bookPoint: 50
+          })
+        });
+  
+        setModalVisible(false);
+        router.back();
       }
-  
-      // Mendapatkan bookPoint (perhitungan acak)
-      const bookPoint = Math.floor(Math.random() * 6) * 10 + 50;
-      console.log("Book Point:", bookPoint);
-  
-      // Update dokumen pengguna di Firestore
-      await updateDoc(userDocRef, {
-        booksToBePickedUp: arrayUnion({
-          bookID,
-          perpusID: selectedLibrary,
-          pickupDate: pickupDate.toISOString(),
-          reserveTime,
-          bookPoint,
-        }),
-      });
-  
-      setModalVisible(false);
-      router.back();
     } catch (error) {
-      console.error("Gagal melakukan reservasi:", error);
+      console.error('Error completing reservation:', error);
+      Alert.alert(
+        'Error',
+        'Failed to complete reservation. Please try again later.'
+      );
     }
   };
   
+  const renderLibraryPicker = () => {
+    if (libraries.length === 0) {
+      return <Text style={styles.noLibraryText}>No available libraries</Text>;
+    }
+  
+    return (
+      <Picker
+        selectedValue={selectedLibrary}
+        onValueChange={(value) => setSelectedLibrary(value)}
+        style={styles.picker}
+      >
+        <Picker.Item label="Select a library" value={null} />
+        {libraries.map((library) => (
+          <Picker.Item 
+            key={library.id} 
+            label={library.name} 
+            value={library.perpusID} 
+          />
+        ))}
+      </Picker>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -146,15 +198,7 @@ export default function BookDetail() {
             <Text style={styles.modalTitle}>Complete Reservation</Text>
             <Text style={styles.bookIdText}>Book ID: {bookID || 'Not available'}</Text>
             <Text style={styles.label}>Select Library:</Text>
-            <Picker
-              selectedValue={selectedLibrary}
-              onValueChange={(itemValue) => setSelectedLibrary(itemValue)}
-              style={styles.picker}
-            >
-              {libraries.map((library) => (
-                <Picker.Item key={library.id} label={library.name} value={library.perpusID} />
-              ))}
-            </Picker>
+            {renderLibraryPicker()}
             <Text style={styles.label}>Select Pickup Date:</Text>
             <TouchableOpacity
               onPress={() => setShowDatePicker(true)}
@@ -192,8 +236,9 @@ export default function BookDetail() {
                 <Text style={styles.buttonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.button, styles.confirmButton]}
+                style={[styles.button, styles.confirmButton, libraries.length === 0 && styles.disabledButton]}
                 onPress={handleCompleteReserve}
+                disabled={libraries.length === 0}
               >
                 <Text style={styles.buttonText}>Complete Reserve</Text>
               </TouchableOpacity>
@@ -333,4 +378,14 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlign: 'center',
   },
+  noLibraryText: {
+    color: '#666',
+    fontSize: 16,
+    textAlign: 'center',
+    padding: 10,
+  },
+  disabledButton: {
+    backgroundColor: '#cccccc',
+    opacity: 0.7,
+  }
 });
