@@ -1,6 +1,5 @@
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
-
 
 export async function addUser(userId, userData) {
     try {
@@ -10,7 +9,6 @@ export async function addUser(userId, userData) {
       console.error('Error adding user data: ', e);
     }
 }
-
 
 export async function getUser(userId) {
     const docRef = doc(db, 'users', userId);
@@ -22,4 +20,13 @@ export async function getUser(userId) {
         console.log('No such document!');
         return null;
     }
+}
+
+export async function getAllUsers() {
+    const querySnapshot = await getDocs(collection(db, 'users'));
+    const users = [];
+    querySnapshot.forEach(doc => {
+        users.push({ id: doc.id, ...doc.data() });
+    });
+    return users;
 }

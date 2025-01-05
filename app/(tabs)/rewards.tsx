@@ -1,20 +1,32 @@
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Modal } from 'react-native';
 import { useState } from 'react';
+import { useRewards } from '@/hooks/useRewards';
 
 export default function RewardsScreen() {
-  const [points, setPoints] = useState(1200);
+  const { rewards, points, pointsHistory, updatePoints } = useRewards();
   const [showHistory, setShowHistory] = useState(false);
 
-  const rewards = [
-    { id: '1', title: 'Free Coffee', points: 200 },
-    { id: '2', title: 'Discount Voucher', points: 500 },
-    { id: '3', title: 'Free Book', points: 1000 },
-  ];
+  const handleRedeem = async (reward) => {
+    if (points >= reward.points) {
+      await updatePoints(reward.points, `Redeemed ${reward.name}`, 'deduction');
+      alert('Reward redeemed successfully!');
+    } else {
+      alert('Not enough points to redeem this reward.');
+    }
+  };
 
-  const renderReward = ({ item }: { item: { id: string; title: string; points: number } }) => (
-    <View style={styles.rewardItem}>
-      <Text style={styles.rewardTitle}>{item.title}</Text>
+  const renderReward = ({ item }) => (
+    <TouchableOpacity onPress={() => handleRedeem(item)} style={styles.rewardItem}>
+      <Text style={styles.rewardTitle}>{item.name}</Text>
       <Text style={styles.rewardPoints}>{item.points} points</Text>
+    </TouchableOpacity>
+  );
+
+  const renderHistory = ({ item }) => (
+    <View style={styles.historyItem}>
+      <Text style={styles.historyActivity}>{item.activity}</Text>
+      <Text style={styles.historyPoints}>{item.type === 'addition' ? '+' : '-'}{item.points} points</Text>
+      <Text style={styles.historyDate}>{new Date(item.date).toLocaleString()}</Text>
     </View>
   );
 
@@ -44,7 +56,12 @@ export default function RewardsScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Points History</Text>
-            <Text>History details...</Text>
+            <FlatList
+              data={pointsHistory}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={renderHistory}
+              contentContainerStyle={styles.historyList}
+            />
             <TouchableOpacity onPress={() => setShowHistory(false)} style={styles.closeButton}>
               <Text style={styles.closeButtonText}>Close</Text>
             </TouchableOpacity>
@@ -117,6 +134,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 16
+  },
+  historyList: {
+    paddingBottom: 16
+  },
+  historyItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    marginBottom: 8
+  },
+  historyActivity: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  historyPoints: {
+    fontSize: 16,
+    color: 'blue',
+    marginVertical: 4
+  },
+  historyDate: {
+    fontSize: 14,
+    color: '#666'
   },
   closeButton: {
     marginTop: 16,

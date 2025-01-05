@@ -1,61 +1,136 @@
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { auth } from '../../firebaseConfig';
+import { getUser } from '@/hooks/useUser';
+import { getBooks } from '@/hooks/useBook';
 
 export default function HistoryScreen() {
   const [activeTab, setActiveTab] = useState<'waiting' | 'borrowing' | 'completed'>('waiting');
+  const [waitingBooks, setWaitingBooks] = useState([]);
+  const [borrowingBooks, setBorrowingBooks] = useState([]);
+  const [completedBooks, setCompletedBooks] = useState([]);
+  const [books, setBooks] = useState([]);
 
-  const waitingBooks = [
-    { id: '1', title: 'Book A', libraryName: 'Central Library' },
-    { id: '2', title: 'Book B', libraryName: 'Town Library' },
-  ];
+  useEffect(() => {
+    async function fetchData() {
+      const user = auth.currentUser;
+      if (user) {
+        const data = await getUser(user.uid);
+        const booksData = await getBooks();
+        setBooks(booksData);
 
-  const borrowingBooks = [
-    { id: '1', title: 'Book C', libraryName: 'Central Library', deadline: '2023-12-01' },
-    { id: '2', title: 'Book D', libraryName: 'Town Library', deadline: '2023-12-10' },
-  ];
+        const formatBookData = (bookArray) => {
+          return bookArray.map(book => {
+            const bookInfo = booksData.find(b => b.id === book.bookId);
+            return {
+              ...book,
+              title: bookInfo?.title || 'Unknown Title'
+            };
+          });
+        };
 
-  const completedBooks = [
-    { id: '1', title: 'Book E', author: 'Author X' },
-    { id: '2', title: 'Book F', author: 'Author Y' },
-  ];
+        setWaitingBooks(formatBookData(data?.booksToBePickedUp || []));
+        setBorrowingBooks(formatBookData(data?.currentlyBorrowing || []));
+        setCompletedBooks(formatBookData(data?.completed || []));
+      }
+    }
+    fetchData();
+  }, []);
 
-  const renderWaiting = () => (
-    <FlatList
-      data={waitingBooks}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <View style={styles.item}>
-          <Text style={styles.bold}>{item.title}</Text>
-          <Text>{item.libraryName}</Text>
-        </View>
-      )}
-    />
-  );
+  const calculateTimeLeft = (dueDate) => {
+    const now = new Date();
+    const diff = new Date(dueDate) - now;
 
-  const renderBorrowing = () => (
-    <FlatList
-      data={borrowingBooks}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <View style={styles.item}>
-          <View>
-            <Text style={styles.bold}>{item.title}</Text>
-            <Text>{item.libraryName}</Text>
-          </View>
-          <Text style={styles.deadline}>{item.deadline}</Text>
-        </View>
-      )}
-    />
-  );
+    if (diff <= 0) {
+      return {
+        expired: true,
+        days: 0,
+        hours: 0,
+        minutes: 0
+      };
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    return {
+      expired: false,
+      days,
+      hours,
+      minutes
+    };
+  };
+
+  const renderWaiting = () => {
+    const today = new Date();
+    return (
+      <FlatList
+        data={waitingBooks}
+        keyExtractor={(item) => item.bookId}
+        renderItem={({ item }) => {
+          const timeLeft = calculateTimeLeft(item.pickupDueDate);
+          const pickupDueDateStyle = timeLeft.days <= 3 ? styles.dueDateRed : styles.dueDateBlack;
+          return (
+            <View style={styles.item}>
+              <View>
+                <Text style={styles.bold}>{item.title}</Text>
+                <Text>{item.library}</Text>
+              </View>
+              {timeLeft.expired ? (
+                <Text style={styles.expired}>Reservation Expired</Text>
+              ) : (
+                <Text style={pickupDueDateStyle}>
+                  {timeLeft.days} days, {timeLeft.hours} hours, {timeLeft.minutes} minutes left
+                </Text>
+              )}
+            </View>
+          );
+        }}
+      />
+    );
+  };
+
+  const renderBorrowing = () => {
+    const today = new Date();
+    return (
+      <FlatList
+        data={borrowingBooks}
+        keyExtractor={(item) => item.bookId}
+        renderItem={({ item }) => {
+          const timeLeft = calculateTimeLeft(item.dueDate);
+          const dueDateStyle = timeLeft.days <= 3 ? styles.dueDateRed : styles.dueDateBlack;
+          return (
+            <View style={styles.item}>
+              <View>
+                <Text style={styles.bold}>{item.title}</Text>
+                <Text>{item.library}</Text>
+              </View>
+              {timeLeft.expired ? (
+                <Text style={styles.warning}>Warning</Text>
+              ) : (
+                <Text style={dueDateStyle}>
+                  {timeLeft.days} days, {timeLeft.hours} hours, {timeLeft.minutes} minutes left
+                </Text>
+              )}
+            </View>
+          );
+        }}
+      />
+    );
+  };
 
   const renderCompleted = () => (
     <FlatList
       data={completedBooks}
-      keyExtractor={(item) => item.id}
+      keyExtractor={(item) => item.bookId}
       renderItem={({ item }) => (
         <View style={styles.item}>
-          <Text style={styles.bold}>{item.title}</Text>
-          <Text>{item.author}</Text>
+          <View>
+            <Text style={styles.bold}>{item.title}</Text>
+            <Text>{item.library}</Text>
+          </View>
+          <Text>{item.bookPoint} points</Text>
         </View>
       )}
     />
@@ -135,7 +210,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee'
   },
   bold: { fontWeight: 'bold' },
-  deadline: { color: 'red' },
+  dueDateRed: { color: 'orange' },
+  dueDateBlack: { color: 'black' },
+  expired: { color: 'red', fontWeight: 'bold' },
+  warning: { color: 'red', fontWeight: 'bold' },
   tabText: {
     fontSize: 12
   },
