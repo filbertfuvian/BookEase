@@ -16,6 +16,8 @@ export default function HomeScreen() {
   const [maybeYouLikeBooks, setMaybeYouLikeBooks] = useState([]);
   const [newReleaseBooks, setNewReleaseBooks] = useState([]);
   const [totalPoints, setTotalPoints] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationCount, setNotificationCount] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -83,6 +85,40 @@ export default function HomeScreen() {
     fetchBooksData();
   }, []);
 
+  const checkDueDates = async () => {
+    const user = auth.currentUser;
+    if (user) {
+      const userData = await getUser(user.uid);
+      const currentlyBorrowing = userData?.currentlyBorrowing || [];
+      
+      const now = new Date();
+      const dayInMs = 24 * 60 * 60 * 1000;
+      
+      const dueNotifications = currentlyBorrowing
+        .filter(book => {
+          const dueDate = book.dueDate instanceof Date ? 
+            book.dueDate : 
+            new Date(book.dueDate);
+          const timeLeft = dueDate.getTime() - now.getTime();
+          return timeLeft > 0 && timeLeft <= dayInMs;
+        })
+        .map(book => ({
+          id: book.bookID,
+          message: `Book ${book.bookID} is due in less than 24 hours!`,
+          dueDate: book.dueDate
+        }));
+  
+      setNotifications(dueNotifications);
+      setNotificationCount(dueNotifications.length);
+    }
+  };
+
+  useEffect(() => {
+    checkDueDates();
+    const interval = setInterval(checkDueDates, 1800000); // Check every 30 minutes
+    return () => clearInterval(interval);
+  }, []);
+
   const handleBookPress = (book) => {
     router.push({
       pathname: '../reserve/bookDetail',
@@ -104,6 +140,24 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
+  const renderNotifications = () => (
+    <View style={styles.notificationPopup}>
+      <Text style={styles.notificationTitle}>Notifications</Text>
+      {notifications.length > 0 ? (
+        notifications.map(notif => (
+          <View key={notif.id} style={styles.notificationItem}>
+            <Text style={styles.notificationMessage}>{notif.message}</Text>
+            <Text style={styles.notificationDate}>
+              Due: {new Date(notif.dueDate).toLocaleDateString()}
+            </Text>
+          </View>
+        ))
+      ) : (
+        <Text style={styles.noNotifications}>No notifications</Text>
+      )}
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -113,6 +167,11 @@ export default function HomeScreen() {
           <View style={styles.headerRight}>
             <TouchableOpacity onPress={() => setShowNotifications(!showNotifications)}>
               <IconSymbol name="bell.fill" size={32} color="#000" />
+              {notificationCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{notificationCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
             <Link href="/profile" asChild>
               <TouchableOpacity>
@@ -174,11 +233,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Notifications Popup */}
-        {showNotifications && (
-          <View style={styles.notificationPopup}>
-            <Text>Notifications</Text>
-          </View>
-        )}
+        {showNotifications && renderNotifications()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -268,18 +323,61 @@ const styles = StyleSheet.create({
   },
   notificationPopup: {
     position: 'absolute',
-    top: 60,
+    top: 80,
     right: 16,
     backgroundColor: '#fff',
-    padding: 16,
     borderRadius: 8,
+    padding: 16,
+    minWidth: 250,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 6,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  notificationTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  notificationItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    paddingVertical: 8,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  notificationDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  noNotifications: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    paddingVertical: 8,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    backgroundColor: 'red',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });

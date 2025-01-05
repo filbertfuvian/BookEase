@@ -4,7 +4,7 @@ import { Picker } from '@react-native-picker/picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
-import {  doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import {  doc, getDoc, updateDoc, arrayUnion, connectFirestoreEmulator } from "firebase/firestore";
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { getBookAvailability, getLibraries } from '../../services/api';
 import { auth, db } from '../../firebaseConfig';
@@ -49,7 +49,7 @@ export default function BookDetail() {
         const libraryDetails = await getLibraries(availableLibraryIDs);
         setLibraries(libraryDetails);
         if (libraryDetails.length > 0) {
-          setSelectedLibrary(libraryDetails[0].perpusID); // Sesuaikan dengan field yang benar
+          setSelectedLibrary(libraryDetails[0].perpusID)
         }
       } catch (error) {
         console.error("Error fetching libraries:", error);
@@ -126,6 +126,8 @@ export default function BookDetail() {
             bookPoint: 50
           })
         });
+        console.log('Reservation completed successfully perrpusID:', selectedLibrary, 'reserveTime:', reserveTime);
+
   
         setModalVisible(false);
         router.back();
