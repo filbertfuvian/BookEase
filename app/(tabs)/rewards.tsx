@@ -44,9 +44,18 @@ export default function RewardsScreen() {
 
   const renderHistory = ({ item }) => (
     <View style={styles.historyItem}>
-      <Text style={styles.historyActivity}>{item.activity}</Text>
-      <Text style={styles.historyPoints}>{item.type === 'addition' ? '+' : '-'}{item.points} points</Text>
-      <Text style={styles.historyDate}>{new Date(item.date).toLocaleString()}</Text>
+      <View>
+        <Text style={styles.historyActivity}>{item.activity}</Text>
+        <Text style={styles.historyDate}>
+          {new Date(item.date.seconds * 1000).toLocaleDateString()}
+        </Text>
+      </View>
+      <Text style={[
+        styles.historyPoints,
+        item.type === 'addition' ? styles.additionPoints : styles.deductionPoints
+      ]}>
+        {item.type === 'addition' ? '+' : '-'}{item.points}
+      </Text>
     </View>
   );
 
@@ -197,8 +206,13 @@ const styles = StyleSheet.create({
   },
   historyPoints: {
     fontSize: 16,
-    color: 'blue',
-    marginVertical: 4
+    fontWeight: 'bold',
+  },
+  additionPoints: {
+    color: '#4CAF50', // Green
+  },
+  deductionPoints: {
+    color: '#F44336', // Red
   },
   historyDate: {
     fontSize: 14,
