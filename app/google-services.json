@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "360858297727",
+    "project_id": "book-ease-ffa7f",
+    "storage_bucket": "book-ease-ffa7f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:360858297727:android:84c816f41de078932aa64a",
+        "android_client_info": {
+          "package_name": "com.kelompok2imk.bookease"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSwR7-zHvNd2VeAw8MGk-530C9vcZEmPk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

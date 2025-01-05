@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "BookEase",
-    "slug": "BookEase",
+    "slug": "bookease",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +15,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.kelompok2imk.bookease"
     },
     "web": {
       "bundler": "metro",
