@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   },
   cardImage: {
     width: '100%',
-    height: 150,
+    height: 300,
     borderRadius: 8,
     marginBottom: 10
   },
