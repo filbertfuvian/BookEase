@@ -65,50 +65,35 @@ export default function AdminScreen() {
     if (!user.booksToBePickedUp) return;
 
     try {
-      // Update book availability first
-      const bookRef = doc(db, 'books', book.bookID);
-      const bookDoc = await getDoc(bookRef);
-      
-      if (bookDoc.exists()) {
-        const bookData = bookDoc.data();
-        const perpusList = bookData.perpus || [];
-        
-        // Update availability for matching perpusID
-        const updatedPerpusList = perpusList.map((p: any) => {
-          if (p.perpusID === book.perpusID) {
-            return { ...p, available: false };
-          }
-          return p;
-        });
+      // Remove from booksToBePickedUp
+      const newBooksToBePickedUp = user.booksToBePickedUp.filter(
+        (b) => b.bookID !== book.bookID
+      );
 
-        // Update book document
-        await updateDoc(bookRef, {
-          perpus: updatedPerpusList
-        });
+      // Add to currentlyBorrowing with validated data
+      const borrowingBook = {
+        bookID: book.bookID,
+        perpusID: book.perpusID,
+        bookPoint: book.bookPoint || 0,
+        dueDate: new Date(Date.now() + (book.reserveTime || 7) * 24 * 60 * 60 * 1000)
+      };
 
-        // Remove from booksToBePickedUp
-        const newBooksToBePickedUp = user.booksToBePickedUp.filter(
-          (b) => b.bookID !== book.bookID
-        );
+      // Create sanitized user data with initialized arrays
+      const updatedUser = {
+        ...user,
+        booksToBePickedUp: newBooksToBePickedUp || [],
+        currentlyBorrowing: [...(user.currentlyBorrowing || []), borrowingBook],
+        completed: user.completed || [], // Initialize if undefined
+        totalPoints: user.totalPoints || 0
+      };
 
-        // Add to currentlyBorrowing with validated data
-        const borrowingBook = {
-          bookID: book.bookID,
-          perpusID: book.perpusID,
-          bookPoint: book.bookPoint || 0,
-          dueDate: new Date(Date.now() + (book.reserveTime || 7) * 24 * 60 * 60 * 1000)
-        };
+      // Remove any undefined fields
+      (Object.keys(updatedUser) as (keyof typeof updatedUser)[]).forEach(key => 
+        updatedUser[key] === undefined && delete updatedUser[key]
+      );
 
-        // Update user data
-        const updatedUser = {
-          ...user,
-          booksToBePickedUp: newBooksToBePickedUp,
-          currentlyBorrowing: [...(user.currentlyBorrowing || []), borrowingBook]
-        };
-
-        await updateUser(user.id, updatedUser);
-        await refreshPage();
-      }
+      await updateUser(user.id, updatedUser);
+      await refreshPage();
     } catch (error) {
       console.error('Error picking up book:', error);
       Alert.alert('Error', 'Failed to pick up book. Please try again.');
@@ -127,7 +112,6 @@ export default function AdminScreen() {
         const bookData = bookDoc.data();
         const perpusList = bookData.perpus || [];
         
-        // Update availability for matching perpusID
         const updatedPerpusList = perpusList.map((p: any) => {
           if (p.perpusID === book.perpusID) {
             return { ...p, available: true };
@@ -135,33 +119,40 @@ export default function AdminScreen() {
           return p;
         });
 
-        // Update book document
         await updateDoc(bookRef, {
           perpus: updatedPerpusList
         });
+
+        // Create point history entry
+        const pointHistoryEntry = {
+          type: 'addition',
+          points: book.bookPoint,
+          activity: `Completed reading book: ${bookData.title}`,
+          date: new Date().toISOString()
+        };
+
+        const newCurrentlyBorrowing = user.currentlyBorrowing.filter((b) => b.bookID !== book.bookID);
+        const newCompleted = [
+          ...(user.completed || []),
+          {
+            bookID: book.bookID,
+            perpusID: book.perpusID,
+            dueDate: book.dueDate instanceof Date ? book.dueDate : new Date(book.dueDate),
+            bookPoint: book.bookPoint,
+          },
+        ];
+
+        const updatedUser = {
+          ...user,
+          currentlyBorrowing: newCurrentlyBorrowing,
+          completed: newCompleted,
+          totalPoints: (user.totalPoints || 0) + book.bookPoint,
+          pointsHistory: [...(user.pointsHistory || []), pointHistoryEntry]
+        };
+
+        await updateUser(user.id, updatedUser);
+        await refreshPage();
       }
-
-      // Continue with existing book return logic
-      const newCurrentlyBorrowing = user.currentlyBorrowing.filter((b) => b.bookID !== book.bookID);
-      const newCompleted = [
-        ...(user.completed || []),
-        {
-          bookID: book.bookID,
-          perpusID: book.perpusID,
-          dueDate: book.dueDate instanceof Date ? book.dueDate : new Date(book.dueDate),
-          bookPoint: book.bookPoint,
-        },
-      ];
-
-      const updatedUser = {
-        ...user,
-        currentlyBorrowing: newCurrentlyBorrowing,
-        completed: newCompleted,
-        totalPoints: (user.totalPoints || 0) + book.bookPoint,
-      };
-
-      await updateUser(user.id, updatedUser);
-      await refreshPage();
     } catch (error) {
       console.error('Error returning book:', error);
       Alert.alert('Error', 'Failed to return book. Please try again.');
